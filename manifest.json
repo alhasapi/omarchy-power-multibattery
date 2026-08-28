@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "id": "alhasapi.power",
+  "name": "Power (Multi-Battery)",
+  "version": "1.0.0",
+  "author": "Moktar Alhasapi",
+  "description": "Battery, power profile, and system stats — with per-battery cycles, capacity and health on multi-battery laptops",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Power (Multi-Battery)",
+    "description": "Battery, power profile, and system stats — with per-battery cycles, capacity and health on multi-battery laptops",
+    "category": "System",
+    "allowMultiple": false
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.power"
+  }
+}
