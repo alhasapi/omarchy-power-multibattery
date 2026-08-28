@@ -13,10 +13,12 @@ Omarchy's battery status reads a single device:
 battery=$(upower -e | grep BAT | head -n 1)
 ```
 
-Percentage and power draw survive that, because a machine has one aggregate charge level and one
-aggregate draw. **Charge cycles, capacity and health do not.** They are facts about a physical
-cell, and there is no meaningful way to sum them — so on a machine with two batteries the panel
-shows one cell's numbers labelled as the machine's.
+Everything downstream of that line describes one cell while claiming to describe the laptop.
+
+Charge level and power draw at least *have* an aggregate, so they can be fixed by reading UPower's
+`DisplayDevice` instead. **Charge cycles, capacity and health cannot.** They are facts about a
+physical cell, and there is no meaningful way to sum them — the only honest fix is to stop
+pretending the machine has one battery.
 
 On the ThinkPad T480 this was written for, the two packs are nowhere near each other:
 
@@ -29,8 +31,12 @@ The stock widget reports `965` as *the* cycle count. Swap which pack the kernel 
 and the same machine reports `156`. Neither is wrong about a battery; both are wrong about the
 laptop.
 
-This plugin gives every battery its own card, so the aggregate stays aggregate and the per-cell
-facts stay per-cell.
+The charge level goes wrong the same way. With the internal pack at 21% and the external at 95%,
+`DisplayDevice` puts the machine at 53% with 2h 42m left — the stock read reports **21% and 38m**,
+because that is all BAT0 knows.
+
+This plugin takes the machine-wide figures from UPower's aggregate device and gives every battery
+its own card, so the aggregate stays aggregate and the per-cell facts stay per-cell.
 
 ## Install
 

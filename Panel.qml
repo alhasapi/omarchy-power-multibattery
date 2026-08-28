@@ -109,6 +109,27 @@ Panel {
     return Model.batteryFraction(d)
   }
 
+  // Machine-wide figures come from UPower's aggregate device, not from
+  // omarchy-battery-status. That script reads the first BAT* only, so on a
+  // two-battery machine it reported one cell's charge and runtime as the
+  // laptop's: 22% and 38m left while the machine actually held 53% and 2.7
+  // hours. The progress bar below already used the aggregate, so the number
+  // and the bar it sat on disagreed.
+  readonly property string machinePercentLabel: {
+    var d = UPower.displayDevice
+    return d && d.isPresent ? Math.round(root.batteryFraction * 100) + "%" : "—"
+  }
+
+  readonly property string machineTimeLabel: Model.deviceTimeLabel(UPower.displayDevice, root.discharging)
+
+  // Rate is the one figure the script reads better than UPower on a single
+  // cell: it prefers the instantaneous sysfs telemetry, which UPower can lag
+  // by tens of seconds. That shortcut resolves to one battery, so it stays
+  // only where there is one to resolve to.
+  readonly property string machineRateLabel: root.multiBattery
+    ? Model.deviceFlowLabel(UPower.displayDevice)
+    : (root.batteryInfo.rate || "")
+
   readonly property bool charging: {
     var d = UPower.displayDevice
     return d && d.isPresent && !UPower.onBattery && !root.batteryFlowIdle
@@ -411,7 +432,7 @@ Panel {
 
           Text {
             id: heroPercent
-            text: root.batteryInfo.percentage || "—"
+            text: root.machinePercentLabel
             color: root.bar.foreground
             font.family: root.bar.fontFamily
             font.pixelSize: Style.font.displayLarge
@@ -485,11 +506,11 @@ Panel {
             spacing: Style.spacing.labelGap
             InfoPair {
               label: root.chargeThresholdActive ? "Charge limit" : (root.discharging ? "Time left" : "Time to full")
-              value: root.chargeThresholdActive ? (root.batteryInfo.threshold || "-") : (root.batteryFlowIdle ? "-" : (root.batteryInfo.time || "—"))
+              value: root.chargeThresholdActive ? (root.batteryInfo.threshold || "-") : (root.batteryFlowIdle ? "-" : root.machineTimeLabel)
             }
             InfoPair {
               label: root.chargeThresholdActive ? "Battery state" : (root.discharging ? "Discharging" : "Charging")
-              value: root.chargeThresholdActive ? "Holding" : (root.batteryFull ? "-" : (root.batteryInfo.rate || ""))
+              value: root.chargeThresholdActive ? "Holding" : (root.batteryFull ? "-" : root.machineRateLabel)
             }
           }
         }

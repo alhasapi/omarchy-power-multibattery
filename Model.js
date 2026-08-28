@@ -182,3 +182,31 @@ if (typeof module !== "undefined") {
     deviceRateLabel: deviceRateLabel
   }
 }
+
+// Machine-wide remaining time, from the aggregate device rather than one cell.
+// UPower reports seconds and uses 0 for "no estimate yet" — the kernel needs a
+// little while under load before it will commit to one — so 0 is unknown, not
+// "no time left".
+function deviceTimeLabel(device, onBattery) {
+  var d = device || {}
+  if (!d.isPresent) return "—"
+  var seconds = Number((onBattery ? d.timeToEmpty : d.timeToFull) || 0)
+  if (seconds <= 0) return "—"
+  var hours = Math.floor(seconds / 3600)
+  var minutes = Math.round((seconds - hours * 3600) / 60)
+  if (minutes === 60) {
+    hours += 1
+    minutes = 0
+  }
+  if (hours > 0) return minutes > 0 ? hours + "h " + minutes + "m" : hours + "h"
+  return minutes + "m"
+}
+
+// Machine-wide power flow. Unsigned, because the row's own label already says
+// which direction it is going; the per-cell cards sign theirs instead.
+function deviceFlowLabel(device) {
+  var d = device || {}
+  var rate = Math.abs(Number(d.changeRate || 0))
+  if (!d.isPresent || rate < 0.05) return "—"
+  return (rate < 10 ? rate.toFixed(1) : String(Math.round(rate))) + "W"
+}
