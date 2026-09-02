@@ -55,6 +55,7 @@ Panel {
     return {
       Charging: UPowerDeviceState.Charging,
       Discharging: UPowerDeviceState.Discharging,
+      Empty: UPowerDeviceState.Empty,
       FullyCharged: UPowerDeviceState.FullyCharged,
       PendingCharge: UPowerDeviceState.PendingCharge,
       PendingDischarge: UPowerDeviceState.PendingDischarge

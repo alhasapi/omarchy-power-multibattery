@@ -148,6 +148,7 @@ function deviceStateLabel(device, states) {
   if (!d.isPresent) return "Absent"
   if (d.state === s.Charging) return "Charging"
   if (d.state === s.Discharging) return "Discharging"
+  if (d.state === s.Empty) return "Empty"
   if (d.state === s.FullyCharged) return "Full"
   if (d.state === s.PendingCharge) return "Holding"
   if (d.state === s.PendingDischarge) return "Pending"
