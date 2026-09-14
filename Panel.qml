@@ -20,6 +20,9 @@ Panel {
   property int profileIndex: 0
   property bool cursorActive: false
   readonly property bool showPercentage: setting("showPercentage", false) === true
+  // Whether the multi-battery summary line names the Holding state. Parked at a
+  // charge threshold all day, that word never changes, so it is switchable.
+  readonly property bool showHolding: setting("showHolding", true) === true
   // With the percentage shown the button paints a text block wider than an
   // icon, so the open-panel mark takes the painted width instead of the
   // icon-sized fraction of the slot the fallback assumes.
@@ -232,6 +235,11 @@ Panel {
     if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
   }
 
+  function toggleHolding() {
+    root.settings = Object.assign({}, root.settings, { showHolding: !root.showHolding })
+    if (root.bar && root.bar.shell) root.bar.shell.updateEntryInline(root.moduleName, root.settings)
+  }
+
   IpcHandler {
     target: "omarchy.power"
 
@@ -241,6 +249,7 @@ Panel {
     function hide() { root.close() }
     function toggle() { root.toggle() }
     function togglePercentage() { root.togglePercentage() }
+    function toggleHolding() { root.toggleHolding() }
   }
 
   onOpenedChanged: {
@@ -300,7 +309,7 @@ Panel {
   Timer {
     id: phraseTimer
     interval: 2800
-    running: root.opened && root.rotatingPhrases
+    running: root.opened && root.rotatingPhrases && !root.multiBattery
     repeat: true
     triggeredOnStart: false
     onTriggered: phraseSwap.restart()
@@ -382,8 +391,59 @@ Panel {
         anchors.top: parent.top
         spacing: Style.space(14)
 
-        // ---------- Hero: battery icon · title/status · percentage ----------
+        // ---------- Multi-battery summary ----------
+        // Stands in for the hero, the bar and the stats row when there is more
+        // than one pack. Everything those said per-cell is said exactly by the
+        // cards below; the one thing they cannot say is the machine-wide charge
+        // level, which is what this line is for.
         Item {
+          visible: root.multiBattery
+          width: parent.width
+          implicitHeight: Math.max(summaryIcon.implicitHeight, summaryText.implicitHeight)
+
+          Text {
+            id: summaryIcon
+            text: root.batteryIcon()
+            color: root.bar.foreground
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.title
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+
+            Behavior on color { ColorAnimation { duration: 200 } }
+          }
+
+          Text {
+            id: summaryText
+            // The percentage is the aggregate from UPower.displayDevice, which
+            // is energy-weighted across the packs — not the sum of the two
+            // percentages, which would read past 100% and weight a spent cell
+            // as heavily as a healthy one.
+            text: {
+              var state = Model.summaryStateLabel(
+                UPower.displayDevice, root.discharging, root.chargeThresholdActive,
+                root.showHolding, root.upowerStates())
+              return state === "" ? root.machinePercentLabel
+                                  : root.machinePercentLabel + " · " + state
+            }
+            color: root.bar.foreground
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.title
+            font.bold: true
+            elide: Text.ElideRight
+            anchors.left: summaryIcon.right
+            anchors.leftMargin: Style.space(10)
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+          }
+        }
+
+        // ---------- Hero: battery icon · title/status · percentage ----------
+        // Single-battery only. Kept in the tree rather than deleted when hidden:
+        // phraseSwap and the rotatingPhrases Connections below both reach
+        // heroStatus by id.
+        Item {
+          visible: !root.multiBattery
           width: parent.width
           implicitHeight: Math.max(heroIcon.implicitHeight, heroLabels.implicitHeight, heroPercent.implicitHeight)
 
@@ -447,6 +507,7 @@ Panel {
 
         // ---------- Battery progress bar ----------
         Item {
+          visible: !root.multiBattery
           width: parent.width
           implicitHeight: Style.space(8)
 
@@ -487,7 +548,7 @@ Panel {
         // the battery sits above the charge-control start threshold, and we
         // refuse to flicker the whole panel for that ~1s window.
         Row {
-          visible: root.batteryInfo.percentage !== undefined
+          visible: root.batteryInfo.percentage !== undefined && !root.multiBattery
           width: parent.width
           spacing: Style.space(20)
 

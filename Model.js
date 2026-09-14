@@ -165,6 +165,20 @@ function deviceRateLabel(device, states) {
   return sign + (rate < 10 ? rate.toFixed(1) : Math.round(rate)) + "W"
 }
 
+// The state word for the one-line multi-battery summary. "Holding" is the
+// panel's existing name for sitting at a charge threshold, and it is the one
+// state that can be switched off: on a machine parked at 80% all day it is
+// permanent, so it stops being news and starts being noise.
+function summaryStateLabel(device, onBattery, thresholdActive, showHolding, states) {
+  var d = device || {}
+  var s = states || {}
+  if (!d.isPresent) return ""
+  if (thresholdActive) return showHolding === false ? "" : "Holding"
+  if (!onBattery && (d.state === s.FullyCharged || batteryFraction(d) >= 1)) return "Full"
+  if (onBattery) return "Discharging"
+  return "Charging"
+}
+
 if (typeof module !== "undefined") {
   module.exports = {
     clampIndex: clampIndex,
@@ -180,7 +194,8 @@ if (typeof module !== "undefined") {
     physicalBatteries: physicalBatteries,
     parseBatteryDetails: parseBatteryDetails,
     deviceStateLabel: deviceStateLabel,
-    deviceRateLabel: deviceRateLabel
+    deviceRateLabel: deviceRateLabel,
+    summaryStateLabel: summaryStateLabel
   }
 }
 
