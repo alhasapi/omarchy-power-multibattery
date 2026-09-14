@@ -49,6 +49,41 @@ Panel {
   // { BAT0: { cycles, size, health, ... }, ... } from bin/battery-details.
   property var batteryDetails: ({})
 
+  // Whether any pack reports a stop threshold at all. Hardware without charge
+  // control reports none, and there the button is meaningless, so it is hidden
+  // rather than shown doing nothing.
+  // Mains, as opposed to "the pack is not discharging" — a battery sitting at
+  // its stop threshold on AC is not discharging either. UPower.onBattery is the
+  // machine-wide answer and the same one TLP gates fullcharge on.
+  readonly property bool acConnected: !UPower.onBattery
+
+  readonly property bool chargeCapSupported: {
+    var names = Object.keys(root.batteryDetails)
+    for (var i = 0; i < names.length; i++)
+      if (root.batteryDetails[names[i]].thresholdEnd !== undefined) return true
+    return false
+  }
+
+  // True when nothing is capping the charge — every pack's stop threshold sits
+  // at 100. This is read back from the hardware on every refresh rather than
+  // remembered, so a `tlp setcharge` run from a terminal, or the reboot that
+  // expires a lift, is reflected without the panel needing to be told.
+  readonly property bool fullChargeActive: {
+    var names = Object.keys(root.batteryDetails)
+    if (names.length === 0) return false
+    for (var i = 0; i < names.length; i++) {
+      var end = Number(root.batteryDetails[names[i]].thresholdEnd)
+      if (!(end >= 100)) return false
+    }
+    return true
+  }
+
+  function setFullCharge(on) {
+    if (fullChargeProc.running) return
+    fullChargeProc.command = ["pkexec", root.pluginDir + "bin/battery-full-charge", on ? "on" : "off"]
+    fullChargeProc.running = true
+  }
+
   function detailsFor(device) {
     var key = device ? String(device.nativePath || "") : ""
     return (key && batteryDetails[key]) ? batteryDetails[key] : ({})
@@ -301,6 +336,15 @@ Panel {
     onExited: root.refresh()
   }
 
+  // pkexec prompts, so this can sit unresolved for a while, and the user can
+  // dismiss it. Either way the thresholds are re-read afterwards and the button
+  // settles on whatever the hardware actually says — a cancelled prompt leaves
+  // it exactly where it was.
+  Process {
+    id: fullChargeProc
+    onExited: root.refresh()
+  }
+
   Timer { interval: 5000; running: root.opened; repeat: true; onTriggered: root.refresh() }
 
   // Rotate the status phrase while the panel is open and we're in a
@@ -399,7 +443,7 @@ Panel {
         Item {
           visible: root.multiBattery
           width: parent.width
-          implicitHeight: Math.max(summaryIcon.implicitHeight, summaryText.implicitHeight)
+          implicitHeight: Math.max(summaryIcon.implicitHeight, summaryText.implicitHeight, chargeCapToggle.implicitHeight)
 
           Text {
             id: summaryIcon
@@ -433,8 +477,34 @@ Panel {
             elide: Text.ElideRight
             anchors.left: summaryIcon.right
             anchors.leftMargin: Style.space(10)
+            anchors.right: chargeCapToggle.visible ? chargeCapToggle.left : parent.right
+            anchors.rightMargin: Style.space(6)
+            anchors.verticalCenter: parent.verticalCenter
+          }
+
+          // Lifts the configured charge cap for this cycle, via tlp fullcharge.
+          // Closed padlock: the cap is in force. Open: it has been let off, and
+          // TLP will put it back at the next boot. State comes from the
+          // hardware, so the icon cannot drift from what is actually set.
+          PanelActionButton {
+            id: chargeCapToggle
+            visible: root.chargeCapSupported
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
+            iconText: root.fullChargeActive ? "󰌿" : "󰌾"
+            // TLP refuses fullcharge on DC ("possible on AC power only"), so
+            // the lift is offered only when it can actually be carried out.
+            // Putting the limit back is not gated, which is why the two arms
+            // differ rather than sharing one condition.
+            tooltipText: root.fullChargeActive
+              ? "Charging to 100% — click to restore the limit"
+              : (root.acConnected
+                ? "Charge to 100% this time"
+                : "Plug in AC to charge to 100%")
+            foreground: root.bar.foreground
+            fontFamily: root.bar.fontFamily
+            enabled: !fullChargeProc.running && (root.fullChargeActive || root.acConnected)
+            onClicked: root.setFullCharge(!root.fullChargeActive)
           }
         }
 

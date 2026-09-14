@@ -1,0 +1,56 @@
+#!/bin/bash
+# Post-install step for the Power (Multi-Battery) plugin.
+#
+# `omarchy plugin add` copies files into ~/.config/omarchy/plugins/<id>/ and
+# stops there, so the one thing this plugin cannot do for itself has to be done
+# once by hand: registering the polkit action behind the charge-limit button,
+# with this install's real path baked into exec.path.
+#
+# Only needed if you want that button. Everything else in the panel is
+# read-only and works without this.
+#
+# Idempotent: re-running re-installs the policy, which is also the right fix
+# after the plugin directory moves -- a stale exec.path shows up as a generic
+# system prompt instead of Omarchy's themed one, or as a silent failure.
+
+set -euo pipefail
+
+plugin_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+helper_path="$plugin_dir/bin/battery-full-charge"
+template="$plugin_dir/polkit/alhasapi.power.fullcharge.policy.in"
+policy_dest=/usr/share/polkit-1/actions/alhasapi.power.fullcharge.policy
+
+if [[ ! -f $template ]]; then
+  echo "error: missing polkit template at $template" >&2
+  exit 1
+fi
+if [[ ! -x $helper_path ]]; then
+  echo "error: missing or non-executable $helper_path" >&2
+  exit 1
+fi
+if ! command -v tlp >/dev/null; then
+  echo "warning: tlp is not installed -- the charge-limit button will not work" >&2
+fi
+
+staged=$(mktemp)
+trap 'rm -f "$staged"' EXIT
+
+# The path lands inside an XML attribute, so escape the five XML entities
+# rather than assuming a well-behaved path. sed's delimiter is | because the
+# path contains slashes.
+escaped_path=$(printf '%s' "$helper_path" \
+  | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g' -e "s/'/\&apos;/g")
+sed "s|@HELPER_PATH@|$escaped_path|g" "$template" > "$staged"
+
+if grep -q '@HELPER_PATH@' "$staged"; then
+  echo "error: failed to substitute the helper path into the policy" >&2
+  exit 1
+fi
+
+echo "Installing polkit action to $policy_dest"
+echo "  exec.path -> $helper_path"
+sudo install -Dm644 "$staged" "$policy_dest"
+
+echo
+echo "Done. The charge-limit button in the power panel will now prompt for"
+echo "authentication instead of failing silently."

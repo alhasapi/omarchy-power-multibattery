@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1.0/policyconfig.dtd">
+<!--
+  Template. bin/omarchy-power-install substitutes @HELPER_PATH@ with the real
+  path to bin/battery-full-charge and installs the result into
+  /usr/share/polkit-1/actions/. polkit matches a pkexec'd binary to an action
+  by that exec.path annotation, so it has to be the absolute path this
+  particular install actually runs. That is why this ships as a template
+  rather than a finished file with somebody else's home directory baked in.
+
+  auth_admin_keep, so lifting the cap and putting it back in one sitting
+  prompts once rather than twice.
+-->
+<policyconfig>
+  <vendor>Omarchy Power (Multi-Battery)</vendor>
+  <vendor_url>https://github.com/alhasapi/omarchy-power-multibattery</vendor_url>
+  <icon_name>battery</icon_name>
+  <action id="alhasapi.power.fullcharge">
+    <description>Change the battery charge limit</description>
+    <message>Authentication is required to change the battery charge limit</message>
+    <icon_name>battery</icon_name>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">@HELPER_PATH@</annotate>
+  </action>
+</policyconfig>
