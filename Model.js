@@ -142,7 +142,9 @@ function parseBatteryDetails(raw) {
   return out
 }
 
-function deviceStateLabel(device, states) {
+// capLifted: this pack's stop threshold is 100, so pending-charge cannot mean
+// "holding at the limit" — the firmware is simply not charging it right now.
+function deviceStateLabel(device, states, capLifted) {
   var d = device || {}
   var s = states || {}
   if (!d.isPresent) return "Absent"
@@ -150,7 +152,7 @@ function deviceStateLabel(device, states) {
   if (d.state === s.Discharging) return "Discharging"
   if (d.state === s.Empty) return "Empty"
   if (d.state === s.FullyCharged) return "Full"
-  if (d.state === s.PendingCharge) return "Holding"
+  if (d.state === s.PendingCharge) return capLifted ? "Not charging" : "Holding"
   if (d.state === s.PendingDischarge) return "Pending"
   return "Idle"
 }

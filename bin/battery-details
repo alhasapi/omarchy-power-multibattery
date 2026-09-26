@@ -66,13 +66,20 @@ for (( i = 0; i < count; i++ )); do
   full=$(awk '/energy-full:/ { print $2; exit }' <<<"$info")
   design=$(awk '/energy-full-design:/ { print $2; exit }' <<<"$info")
   health=$(awk '/^ *capacity:/ { gsub(/%/, "", $2); print $2; exit }' <<<"$info")
-  start=$(awk '/charge-start-threshold:/ { gsub(/%/, "", $2); print int($2); exit }' <<<"$info")
-  end=$(awk '/charge-end-threshold:/ { gsub(/%/, "", $2); print int($2); exit }' <<<"$info")
+  # Thresholds come from sysfs first, the other way round from every other
+  # field here. UPower reads them once at enumeration and never refreshes them:
+  # after `tlp fullcharge` lifts a cap, sysfs reads 96/100 while UPower still
+  # insists on 75/80, indefinitely. Preferring UPower would mean the panel's
+  # charge-limit button could never see its own effect. UPower stays as the
+  # fallback for firmware that exposes the values to it but not through
+  # charge_control_*_threshold.
+  start=$(cat "$power_supply_path/$name/charge_control_start_threshold" 2>/dev/null)
+  end=$(cat "$power_supply_path/$name/charge_control_end_threshold" 2>/dev/null)
+  [[ -z $start ]] && start=$(awk '/charge-start-threshold:/ { gsub(/%/, "", $2); print int($2); exit }' <<<"$info")
+  [[ -z $end ]] && end=$(awk '/charge-end-threshold:/ { gsub(/%/, "", $2); print int($2); exit }' <<<"$info")
 
   # UPower's charge-cycles is absent on some firmware; sysfs usually still has it.
   [[ -z $cycles || $cycles == "N/A" ]] && cycles=$(cat "$power_supply_path/$name/cycle_count" 2>/dev/null)
-  [[ -z $start ]] && start=$(cat "$power_supply_path/$name/charge_control_start_threshold" 2>/dev/null)
-  [[ -z $end ]] && end=$(cat "$power_supply_path/$name/charge_control_end_threshold" 2>/dev/null)
 
   emit "$name" label "$label"
   [[ -n $model ]] && emit "$name" model "$model"
@@ -88,5 +95,9 @@ for (( i = 0; i < count; i++ )); do
     else
       emit "$name" threshold "${end}%"
     fi
+    # The raw stop value as well as the formatted one: the panel compares it
+    # against 100 to tell a capped pack from one that has been let off for a
+    # cycle, and parsing that back out of "75-80%" would be silly.
+    emit "$name" thresholdEnd "$end"
   fi
 done

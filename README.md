@@ -84,6 +84,44 @@ the charge start/stop thresholds, plus vendor and model so a cell is identifiabl
 falls back to `/sys/class/power_supply` for cycles and thresholds where UPower reports nothing,
 which is common on older firmware.
 
+## Charging to 100% for one cycle
+
+If TLP caps your charge (`STOP_CHARGE_THRESH_BAT*` in `/etc/tlp.conf`), the padlock at the right
+of the summary line lifts that cap for a single charge — the flight where 80% is not enough. It
+runs `tlp fullcharge` against every pack that reports a threshold.
+
+The configured limits come back when you click the padlock again, at the next boot, or as soon as
+you unplug — TLP reapplies them on the transition to battery power, which its own
+`RESTORE_THRESHOLDS_ON_BAT=1` default makes the normal behaviour. So the lift lasts for the charge
+it was asked for and no longer. The padlock reads the thresholds back from the hardware on every
+refresh rather than remembering what it did, so it stays honest when TLP takes the cap back.
+
+It is deliberately not a persistent setting. A cap you can switch off permanently from a panel is
+a cap you will switch off permanently.
+
+The button needs two things, and hides or dims itself when it does not have them:
+
+- **TLP, with charge thresholds configured.** Without a stop threshold there is no cap to lift and
+  the button does not appear at all.
+- **AC power.** TLP refuses `fullcharge` on battery, so the button is disabled until you plug in.
+  Restoring the limit is not gated.
+
+Lifting the cap needs root, so run the installer once to register the polkit action:
+
+```bash
+~/.config/omarchy/plugins/alhasapi.power/bin/omarchy-power-install
+```
+
+It bakes this install's absolute path into `exec.path`, which is how polkit matches the helper to
+the action — so re-run it if the plugin directory ever moves.
+
+Strictly it is optional. Without it the button still works, because `pkexec` falls back to asking
+you to authorize the raw command; what you lose is the wording. Registered, the prompt reads
+*"Authentication is required to change the battery charge limit"*. Unregistered, it reads
+*"Authorize running '/home/you/.config/omarchy/plugins/alhasapi.power/bin/battery-full-charge on'"*,
+which is a worse thing to be shown by something asking for your password. Everything else in the
+panel is read-only and needs none of this.
+
 ## Credits
 
 Derived from Omarchy's first-party `omarchy.power` plugin, MIT, © 37signals.

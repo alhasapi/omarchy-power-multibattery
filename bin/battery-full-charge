@@ -1,0 +1,58 @@
+#!/bin/bash
+
+# Privileged half of the panel's charge-limit button.
+#
+# Drives TLP rather than writing charge_control_*_threshold directly: TLP owns
+# those files and reapplies its configured values on its own power events, so a
+# direct write would be silently undone the next time AC is plugged or unplugged.
+# Going through TLP also makes the lift expire at the next boot by construction,
+# which is the semantics the button advertises -- one full charge, not a new
+# permanent setting.
+#
+# Both packs, explicitly. `tlp fullcharge` with no battery argument applies to
+# the main battery only, which on a Power Bridge ThinkPad silently leaves the
+# external pack capped.
+#
+# Usage: battery-full-charge {on|off}
+
+set -euo pipefail
+
+tlp=/usr/bin/tlp
+power_supply_path="${OMARCHY_POWER_SUPPLY_PATH:-/sys/class/power_supply}"
+
+if [[ ! -x $tlp ]]; then
+  echo "error: tlp is not installed at $tlp" >&2
+  exit 1
+fi
+
+# Only cells the firmware will actually take a threshold for. A pack without
+# charge_control_end_threshold has nothing to lift, and naming it would just
+# make TLP complain.
+batteries=()
+for path in "$power_supply_path"/BAT*; do
+  [[ -e $path/charge_control_end_threshold ]] || continue
+  batteries+=("$(basename "$path")")
+done
+
+if (( ${#batteries[@]} == 0 )); then
+  echo "error: no battery exposes a charge threshold" >&2
+  exit 1
+fi
+
+case "${1-}" in
+  on)  verb=fullcharge ;;
+  off) verb=setcharge ;;
+  *)
+    echo "usage: ${0##*/} {on|off}" >&2
+    exit 2
+    ;;
+esac
+
+# Keep going after a pack that refuses, so one stubborn cell cannot leave the
+# other half-applied, but still fail overall so the panel does not report a
+# success it did not get.
+status=0
+for battery in "${batteries[@]}"; do
+  "$tlp" "$verb" "$battery" || status=1
+done
+exit "$status"
