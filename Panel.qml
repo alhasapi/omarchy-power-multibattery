@@ -137,6 +137,10 @@ Panel {
   }
   readonly property bool chargeThresholdActive: {
     var device = UPower.displayDevice
+    // UPower keeps reporting pending-charge and the old thresholds after
+    // `tlp fullcharge`, so a lifted cap is ruled out from sysfs first: with
+    // every stop threshold at 100 nothing can be holding a pack at a limit.
+    if (root.fullChargeActive) return false
     return Model.chargeThresholdActive(device, root.discharging, upowerStates())
   }
   readonly property bool batteryFull: fullyCharged || (!root.discharging && batteryFraction >= 1)
@@ -834,7 +838,8 @@ Panel {
         // two cells of different ages wear at different rates.
         InfoPair { label: "Health"; value: details.health || "—" }
         InfoPair {
-          label: Model.deviceStateLabel(device, root.upowerStates())
+          label: Model.deviceStateLabel(device, root.upowerStates(),
+                                        Number(details.thresholdEnd) >= 100)
           value: Model.deviceRateLabel(device, root.upowerStates())
         }
       }
